@@ -12,6 +12,3 @@
 
 # GoLand project files
 .idea/
-
-# Go module files
-go.sum
