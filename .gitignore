@@ -1,0 +1,17 @@
+*.env
+
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Output directories
+/bin
+/obj
+
+# GoLand project files
+.idea/
+
+# Go module files
+go.sum
