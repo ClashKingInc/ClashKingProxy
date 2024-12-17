@@ -6,7 +6,8 @@ from base64 import b64decode
 from json import loads as json_loads
 from multiprocessing import shared_memory, Lock as ProcessLock
 import numpy as np
-from typing import List
+from typing import List, Deque
+from collections import deque
 
 # ------------------------------------------
 # Utility Functions
@@ -68,6 +69,16 @@ async def get_keys(emails: list, passwords: list, key_names: str, key_count: int
                     "https://developer.clashofclans.com/api/apikey/create", json=data
                 )
                 new_key = await create_resp.json()
+
+                # Debug response structure
+                print("API Key Creation Response:", new_key)
+
+                if "error" in new_key:
+                    raise RuntimeError(f"API Key Creation Failed: {new_key['error']}")
+
+                if "key" not in new_key or "key" not in new_key["key"]:
+                    raise RuntimeError("Invalid response structure: Missing 'key' field.")
+
                 keys.append(new_key["key"]["key"])
 
             total_keys.extend(keys)
@@ -141,8 +152,12 @@ async def startup_event():
     if os.getenv("WORKER_ID", "0") == "0":
         print("Main process initializing keys...")
         emails, passwords = generate_credentials()
-        keys = await get_keys(emails, passwords, "test", 10)
-        proxy.key_manager.initialize_keys(keys)
+        try:
+            keys = await get_keys(emails, passwords, "test", 10)
+            proxy.key_manager.initialize_keys(keys)
+        except Exception as e:
+            print(f"Error during key initialization: {e}")
+            raise RuntimeError("Failed to initialize API keys.")
 
 
 @app.on_event("shutdown")
