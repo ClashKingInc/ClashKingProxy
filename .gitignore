@@ -1,0 +1,60 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+*.env
+*.env.*
+
+# PyCharm project files
+.idea/
+*.iml
+
+# Logs
+*.log
+logs/
+*.pid
+
+# Mac system files
+.DS_Store
+
+# Generated files and builds
+dist/
+build/
+*.egg-info/
+.eggs/
+*.spec
+
+# Testing
+coverage.xml
+*.cover
+htmlcov/
+
+# Temp files
+*.tmp
+*.swp
+*.bak
+*.old
+*.orig
+*~
+
+# Ignore any secrets
+secrets.json
+config.ini
+
+# Docker files
+docker-compose.override.yml
+
+# GitHub workflows cache (if needed)
+.github/*/cache/
+
+# Ignore any files for debug purposes
+debug.log
