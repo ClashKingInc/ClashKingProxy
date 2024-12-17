@@ -33,4 +33,4 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/clashkinginc/clashkingproxy:${{ github.ref_name == 'master' && 'latest' || env.SANITIZED_BRANCH }}
+            ghcr.io/clashkinginc/clashkingproxy:${{ github.ref_name == 'main' && 'latest' || env.SANITIZED_BRANCH }}
