@@ -1,14 +1,12 @@
 from fastapi import FastAPI, HTTPException, Request
 import aiohttp
-import asyncio
 import os
 from datetime import datetime
 from base64 import b64decode
 from json import loads as json_loads
 from multiprocessing import shared_memory, Lock as ProcessLock
 import numpy as np
-from typing import List, Deque
-from collections import deque
+from typing import List
 
 # ------------------------------------------
 # Utility Functions
