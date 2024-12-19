@@ -1,6 +1,7 @@
 import uvloop
 import asyncio
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 import aiohttp
 import os
 from collections import deque
@@ -28,7 +29,6 @@ class CoCProxy:
     async def cleanup(self):
         if self.session:
             await self.session.close()
-
 
 
 middleware = [
@@ -76,8 +76,6 @@ async def read_root():
          name="Test a coc api endpoint, very high ratelimit, only for testing without auth",
          include_in_schema=False)
 async def test_endpoint(url: str, request: Request):
-    global KEYS
-
     query_string = "&".join([f"{key}={value}" for key, value in request.query_params.items()])
 
     headers = {"Accept": "application/json", "Authorization": f"Bearer {proxy.keys[0]}"}
@@ -90,25 +88,29 @@ async def test_endpoint(url: str, request: Request):
 
     async with aiohttp.ClientSession() as session:
         async with session.get(full_url, headers=headers) as api_response:
+            # Handle non-200 responses by raising an HTTPException
             if api_response.status != 200:
                 content = await api_response.text()
                 raise HTTPException(status_code=api_response.status, detail=content)
+
             item = await api_response.json()
 
-    return item
+            cache_headers = {}
+            for header in ['Cache-Control', 'Expires', 'ETag', 'Last-Modified']:
+                value = api_response.headers.get(header)
+                if value:
+                    cache_headers[header] = value
+
+    # Return the JSON response along with the extracted cache headers
+    return JSONResponse(content=item, headers=cache_headers)
 
 
 @app.post("/v1/{url:path}",
              name="Test a coc api endpoint, very high ratelimit, only for testing without auth",
              include_in_schema=False)
 async def test_post_endpoint(url: str, request: Request):
-    global KEYS
-
-    # Extract query parameters
     query_params = request.query_params
-    fields = query_params.get("fields")
 
-    # Remove the "fields" parameter from the query parameters
     query_params = {key: value for key, value in query_params.items() if key != "fields"}
     query_string = "&".join([f"{key}={value}" for key, value in query_params.items()])
 
