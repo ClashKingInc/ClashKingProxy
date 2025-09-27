@@ -1,23 +1,25 @@
-FROM python:3.11-bookworm
-
-LABEL org.opencontainers.image.source=https://github.com/ClashKingInc/ClashKingProxy
-LABEL org.opencontainers.image.description="Image for the ClashKing API Proxy"
-LABEL org.opencontainers.image.licenses=MIT
-
-# Set the working directory in the container
+FROM oven/bun:1.1-alpine AS base
 WORKDIR /app
 
-# First, copy only the requirements.txt file
-COPY requirements.txt .
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=8011
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+FROM base AS deps
+COPY bun.lockb package.json ./
+RUN bun install --frozen-lockfile
 
-# Now copy the rest of the application code into the container
+FROM base AS app
+WORKDIR /app
+
+COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=deps /usr/local/bin/bun /usr/local/bin/bun
+
 COPY . .
 
-# Expose the port the app runs on
 EXPOSE 8011
 
-# Command to run the FastAPI application with multiple workers
-CMD ["python3", "main.py"]
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT}/ || exit 1
+
+CMD ["bun", "run", "index.ts"]
