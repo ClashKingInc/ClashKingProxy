@@ -64,7 +64,6 @@ const nextKey = () => {
   return k
 }
 
-const CACHE_HEADERS = ['Cache-Control', 'Expires', 'ETag', 'Last-Modified']
 const HOST = process.env.HOST ?? '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8011);
 const BASE_URL = 'https://api.clashofclans.com/v1/'
