@@ -5,10 +5,13 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8011
 
+# ---- deps (cache) ----
 FROM base AS deps
-COPY bun.lockb package.json ./
+# Copy package.json + bun.lock
+COPY bun.lock package.json ./
 RUN bun install --frozen-lockfile
 
+# ---- app ----
 FROM base AS app
 WORKDIR /app
 
