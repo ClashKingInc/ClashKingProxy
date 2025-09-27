@@ -2,6 +2,44 @@ import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import 'dotenv/config'
 
+// --- request rate tracking (per-second ring buffer for 24h) ---
+const BUCKETS = 86_400;                         // 24h of seconds
+const hits = new Uint32Array(BUCKETS);          // counts
+const secs = new Int32Array(BUCKETS);           // which epoch-second each slot represents
+
+const nowSec = () => (Date.now() / 1000) | 0;
+
+function recordHit() {
+  const s = nowSec();
+  const i = s % BUCKETS;
+  if (secs[i] !== s) {          // new second in this slot → reset
+    secs[i] = s;
+    hits[i] = 0;
+  }
+  hits[i] += 1;
+}
+
+function windowSum(lastNSec: number): number {
+  const n = nowSec();
+  let sum = 0;
+  for (let off = 0; off < lastNSec; off++) {
+    const t = n - off;
+    const i = t % BUCKETS;
+    if (secs[i] === t) sum += hits[i];  // only count if slot matches exact second
+  }
+  return sum;
+}
+
+const WINDOWS: Record<string, number> = {
+  "10s": 10,
+  "1m": 60,
+  "5m": 300,
+  "15m": 900,
+  "1h": 3600,
+  "6h": 21600,
+  "12h": 43200,
+  "24h": 86400
+};
 /**
  * Provide keys manually:
  * - Either via .env: COC_KEYS="key1,key2,key3"
@@ -36,6 +74,18 @@ app.use(cors());
 
 app.get('/', () => ({ message: 'CoC Proxy Server is running.' }));
 
+app.get('/stats', () => {
+  const out: Record<string, { requests: number; avg_rps: number }> = {};
+  for (const [label, secs] of Object.entries(WINDOWS)) {
+    const reqs = windowSum(secs);
+    out[label] = { requests: reqs, avg_rps: reqs / secs };
+  }
+  return {
+    now: new Date().toISOString(),
+    windows: out
+  };
+});
+
 const passThrough = (up: Response) => {
   const h = new Headers()
   // only copy the headers you actually want
@@ -49,6 +99,7 @@ const passThrough = (up: Response) => {
 }
 
 app.get('/v1/*', async ({ request, params }) => {
+    recordHit()
     const urlPath = Array.isArray(params['*']) ? params['*'].join('/') : params['*']
 
     const incomingUrl = new URL(request.url)
