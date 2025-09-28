@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import 'dotenv/config'
+import { writeHeapSnapshot } from "v8";
 
 
 // --- request rate & latency tracking (per-second ring buffer for 24h) ---
@@ -99,8 +100,7 @@ app.get('/stats', () => {
   };
 });
 
-
-const passThrough = (up: Response) => {
+const passThrough = async (up: Response) => {
   const h = new Headers()
   for (const k of [
     'cache-control',
@@ -112,10 +112,10 @@ const passThrough = (up: Response) => {
     const v = up.headers.get(k)
     if (v) h.set(k, v)
   }
-  return new Response(up.body, { status: up.status, headers: h })
+  const buf = await up.arrayBuffer()
+  return new Response(buf, { status: up.status, headers: h })
 }
 
-// Combine multiple abort conditions (client disconnect OR timeout)
 const withCombinedSignal = (clientSignal: AbortSignal, ms: number) =>
   AbortSignal.any([clientSignal, AbortSignal.timeout(ms)])
 
@@ -142,7 +142,6 @@ app.get('/v1/*', async ({ request, params }) => {
       redirect: 'manual',
       signal: withCombinedSignal(request.signal, 15_000)
     })
-    console.log(upstream.headers)
     return passThrough(upstream)
   } finally {
     recordMetrics(performance.now() - start)
