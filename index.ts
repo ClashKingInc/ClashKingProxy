@@ -115,7 +115,6 @@ app.get('/v1/*', async ({ request, params }) => {
     }
 
     const upstream = await fetch(forwardUrl, { method: 'GET', headers: fwdHeaders, redirect: 'manual' })
-    if (!upstream.ok) return new Response(await upstream.text(), { status: upstream.status })
     return passThrough(upstream)
 })
 
@@ -139,8 +138,7 @@ app.post('/v1/*', async ({ request, params }) => {
     }
 
     const upstream = await fetch(forwardUrl, { method: 'POST', headers: fwdHeaders, body: request.body, redirect: 'manual' })
-  if (!upstream.ok) return new Response(await upstream.text(), { status: upstream.status })
-  return passThrough(upstream)
+    return passThrough(upstream)
 })
 
 app.listen({ hostname: HOST, port: PORT }, ({ hostname, port }) => {
