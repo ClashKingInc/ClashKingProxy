@@ -17,4 +17,4 @@ EXPOSE 8011
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD curl -f http://127.0.0.1:${PORT}/ || exit 1
 
-CMD ["bun", "run", "index.ts"]
+CMD ["bun", "run", "server.ts"]

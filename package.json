@@ -5,6 +5,7 @@
     "elysia": "^1.4.8"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2"
+    "@types/node": "^24.5.2",
+    "bun-types": "^1.2.23"
   }
 }
