@@ -1,8 +1,0 @@
-{
-  "compilerOptions": {
-    "module": "esnext",
-    "target": "es2022",
-    "moduleResolution": "nodenext",
-    "types": ["bun-types"]
-  }
-}
