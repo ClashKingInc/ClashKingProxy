@@ -1,20 +1,33 @@
-FROM oven/bun:1.1-alpine AS base
+# --- build stage ---
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8011
 
-# deps
-FROM base AS deps
-COPY package.json ./
-RUN bun install
+# Add build tools
+RUN apk add --no-cache git ca-certificates
 
-# app
-FROM base AS app
-WORKDIR /app
-RUN apk add --no-cache curl
-COPY --from=deps /app/node_modules /app/node_modules
+# Copy source
 COPY . .
+
+# Build static binary
+RUN go build -ldflags="-s -w" -o coc-proxy .
+
+# --- final runtime stage ---
+FROM alpine:3.19 AS final
+WORKDIR /app
+
+# Add CA certs for HTTPS
+RUN apk add --no-cache ca-certificates curl
+
+# Copy binary from builder
+COPY --from=builder /app/coc-proxy .
+
+# Expose port
 EXPOSE 8011
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD curl -f http://127.0.0.1:${PORT}/ || exit 1
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD curl -f http://127.0.0.1:${PORT:-8011}/ || exit 1
 
-CMD ["bun", "run", "server.ts"]
+# Default env
+ENV HOST=0.0.0.0 PORT=8011
+
+CMD ["./coc-proxy"]
