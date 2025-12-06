@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
+import { swagger } from '@elysiajs/swagger'
 import 'dotenv/config'
-import { writeHeapSnapshot } from "v8";
 
 
 // --- request rate & latency tracking (per-second ring buffer for 24h) ---
@@ -85,6 +85,21 @@ const BASE_URL = 'https://api.clashofclans.com/v1/'
 
 const app = new Elysia();
 
+app.use(
+  swagger({
+    documentation: {
+      info: {
+        title: 'Clash of Clans API Proxy',
+        version: '1.0.0',
+        description: 'Proxy server for Clash of Clans API with automatic API key rotation. You do NOT need to provide Authorization headers when using this proxy.'
+      },
+      servers: [
+        { url: 'https://proxy.clashk.ing', description: 'Production proxy server' }
+      ]
+    }
+  })
+);
+
 app.get('/', () => ({ message: 'CoC Proxy Server is running.' }));
 
 app.get('/stats', () => {
@@ -98,6 +113,53 @@ app.get('/stats', () => {
     now: new Date().toISOString(),
     windows: out
   };
+}, {
+  detail: {
+    tags: ['Server'],
+    summary: 'Get proxy statistics',
+    description: 'Returns detailed statistics about proxy server performance including request counts, average requests per second (RPS), and average latency across multiple time windows (10s, 1m, 5m, 15m, 1h, 6h, 12h, 24h)',
+    responses: {
+      200: {
+        description: 'Successful response with statistics',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                now: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Current timestamp in ISO format'
+                },
+                windows: {
+                  type: 'object',
+                  description: 'Statistics for different time windows',
+                  additionalProperties: {
+                    type: 'object',
+                    properties: {
+                      requests: {
+                        type: 'number',
+                        description: 'Total number of requests in this time window'
+                      },
+                      avg_rps: {
+                        type: 'number',
+                        description: 'Average requests per second'
+                      },
+                      avg_latency_ms: {
+                        type: 'number',
+                        nullable: true,
+                        description: 'Average latency in milliseconds (null if no requests)'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 });
 
 const passThrough = async (up: Response) => {
@@ -146,6 +208,46 @@ app.get('/v1/*', async ({ request, params }) => {
   } finally {
     recordMetrics(performance.now() - start)
   }
+}, {
+  detail: {
+    tags: ['Clans', 'Players', 'Leagues', 'Locations', 'Goldpass', 'Labels'],
+    summary: 'Proxy GET requests to Clash of Clans API',
+    description: `
+Proxies GET requests to the Clash of Clans API. This endpoint forwards all GET requests to \`https://api.clashofclans.com/v1/*\` with automatic API key rotation.
+
+**Common endpoints:**
+- \`/v1/clans/{clanTag}\` - Get clan information
+- \`/v1/clans/{clanTag}/members\` - List clan members
+- \`/v1/clans/{clanTag}/warlog\` - Get clan war log
+- \`/v1/clans/{clanTag}/currentwar\` - Get current clan war information
+- \`/v1/players/{playerTag}\` - Get player information
+- \`/v1/leagues\` - List leagues
+- \`/v1/locations\` - List locations
+- \`/v1/goldpass/seasons/current\` - Get current gold pass season
+
+**Note:** Tags must be URL-encoded (e.g., #ABC123 becomes %23ABC123)
+
+For full API documentation, see: https://developer.clashofclans.com/api
+    `,
+    parameters: [
+      {
+        name: '*',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+        description: 'API path to proxy (e.g., clans/%23ABC123, players/%23XYZ789)'
+      }
+    ],
+    responses: {
+      200: { description: 'Successful response from Clash of Clans API' },
+      400: { description: 'Client provided incorrect parameters' },
+      403: { description: 'Access denied, either because of missing/incorrect credentials or requesting a resource forbidden for your key' },
+      404: { description: 'Resource was not found' },
+      429: { description: 'Request was throttled (too many requests)' },
+      500: { description: 'Unknown error occurred' },
+      503: { description: 'Service is temporarily unavailable due to maintenance' }
+    }
+  }
 })
 
 // ---- POST proxy ----
@@ -179,6 +281,52 @@ app.post('/v1/*', async ({ request, params }) => {
     return passThrough(upstream)
   } finally {
     recordMetrics(performance.now() - start)
+  }
+}, {
+  detail: {
+    tags: ['Clans', 'Players'],
+    summary: 'Proxy POST requests to Clash of Clans API',
+    description: `
+Proxies POST requests to the Clash of Clans API. This endpoint forwards all POST requests to \`https://api.clashofclans.com/v1/*\` with automatic API key rotation.
+
+**Common POST endpoints:**
+- \`/v1/clans\` - Search for clans (requires JSON body with search criteria)
+- \`/v1/players\` - Search for players (requires JSON body with search criteria)
+
+**Note:** The 'fields' query parameter is filtered out by this proxy.
+
+For full API documentation and request body schemas, see: https://developer.clashofclans.com/api
+    `,
+    parameters: [
+      {
+        name: '*',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+        description: 'API path to proxy (e.g., clans, players)'
+      }
+    ],
+    requestBody: {
+      description: 'Request body to forward to the Clash of Clans API',
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            description: 'Search criteria - structure depends on the endpoint being called'
+          }
+        }
+      }
+    },
+    responses: {
+      200: { description: 'Successful response from Clash of Clans API' },
+      400: { description: 'Client provided incorrect parameters' },
+      403: { description: 'Access denied, either because of missing/incorrect credentials or requesting a resource forbidden for your key' },
+      404: { description: 'Resource was not found' },
+      429: { description: 'Request was throttled (too many requests)' },
+      500: { description: 'Unknown error occurred' },
+      503: { description: 'Service is temporarily unavailable due to maintenance' }
+    }
   }
 })
 
