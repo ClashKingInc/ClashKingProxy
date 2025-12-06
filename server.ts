@@ -174,12 +174,31 @@ const passThrough = async (up: Response) => {
     const v = up.headers.get(k)
     if (v) h.set(k, v)
   }
-  const buf = await up.arrayBuffer()
-  return new Response(buf, { status: up.status, headers: h })
+  // Use blob instead of arrayBuffer to avoid copying data
+  const blob = await up.blob()
+  return new Response(blob, { status: up.status, headers: h })
 }
 
-const withCombinedSignal = (clientSignal: AbortSignal, ms: number) =>
-  AbortSignal.any([clientSignal, AbortSignal.timeout(ms)])
+// Create timeout signal with explicit cleanup to avoid memory retention
+const withTimeout = (clientSignal: AbortSignal, ms: number) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), ms)
+  
+  // If client aborts, abort our controller and clear timeout
+  const onAbort = () => {
+    clearTimeout(timeoutId)
+    controller.abort()
+  }
+  
+  if (clientSignal.aborted) {
+    clearTimeout(timeoutId)
+    controller.abort()
+  } else {
+    clientSignal.addEventListener('abort', onAbort, { once: true })
+  }
+  
+  return controller.signal
+}
 
 // ---- GET proxy ----
 app.get('/v1/*', async ({ request, params }) => {
@@ -202,9 +221,10 @@ app.get('/v1/*', async ({ request, params }) => {
       method: 'GET',
       headers: fwdHeaders,
       redirect: 'manual',
-      signal: withCombinedSignal(request.signal, 15_000)
+      signal: withTimeout(request.signal, 15_000)
     })
-    return passThrough(upstream)
+    const response = await passThrough(upstream)
+    return response
   } finally {
     recordMetrics(performance.now() - start)
   }
@@ -214,16 +234,6 @@ app.get('/v1/*', async ({ request, params }) => {
     summary: 'Proxy GET requests to Clash of Clans API',
     description: `
 Proxies GET requests to the Clash of Clans API. This endpoint forwards all GET requests to \`https://api.clashofclans.com/v1/*\` with automatic API key rotation.
-
-**Common endpoints:**
-- \`/v1/clans/{clanTag}\` - Get clan information
-- \`/v1/clans/{clanTag}/members\` - List clan members
-- \`/v1/clans/{clanTag}/warlog\` - Get clan war log
-- \`/v1/clans/{clanTag}/currentwar\` - Get current clan war information
-- \`/v1/players/{playerTag}\` - Get player information
-- \`/v1/leagues\` - List leagues
-- \`/v1/locations\` - List locations
-- \`/v1/goldpass/seasons/current\` - Get current gold pass season
 
 **Note:** Tags must be URL-encoded (e.g., #ABC123 becomes %23ABC123)
 
@@ -275,10 +285,11 @@ app.post('/v1/*', async ({ request, params }) => {
       headers: fwdHeaders,
       body: request.body as any,
       redirect: 'manual',
-      signal: withCombinedSignal(request.signal, 15_000)
+      signal: withTimeout(request.signal, 15_000)
     })
 
-    return passThrough(upstream)
+    const response = await passThrough(upstream)
+    return response
   } finally {
     recordMetrics(performance.now() - start)
   }
@@ -288,12 +299,6 @@ app.post('/v1/*', async ({ request, params }) => {
     summary: 'Proxy POST requests to Clash of Clans API',
     description: `
 Proxies POST requests to the Clash of Clans API. This endpoint forwards all POST requests to \`https://api.clashofclans.com/v1/*\` with automatic API key rotation.
-
-**Common POST endpoints:**
-- \`/v1/clans\` - Search for clans (requires JSON body with search criteria)
-- \`/v1/players\` - Search for players (requires JSON body with search criteria)
-
-**Note:** The 'fields' query parameter is filtered out by this proxy.
 
 For full API documentation and request body schemas, see: https://developer.clashofclans.com/api
     `,
