@@ -179,8 +179,25 @@ const passThrough = async (up: Response) => {
   return new Response(blob, { status: up.status, headers: h })
 }
 
-const withCombinedSignal = (clientSignal: AbortSignal, ms: number) =>
-  AbortSignal.any([clientSignal, AbortSignal.timeout(ms)])
+const withTimeout = (clientSignal: AbortSignal, ms: number) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), ms)
+  
+  // If client aborts, abort our controller and clear timeout
+  const onAbort = () => {
+    clearTimeout(timeoutId)
+    controller.abort()
+  }
+  
+  if (clientSignal.aborted) {
+    clearTimeout(timeoutId)
+    controller.abort()
+  } else {
+    clientSignal.addEventListener('abort', onAbort, { once: true })
+  }
+  
+  return controller.signal
+}
 
 // ---- GET proxy ----
 app.get('/v1/*', async ({ request, params }) => {
@@ -203,7 +220,7 @@ app.get('/v1/*', async ({ request, params }) => {
       method: 'GET',
       headers: fwdHeaders,
       redirect: 'manual',
-      signal: withCombinedSignal(request.signal, 15_000)
+      signal: withTimeout(request.signal, 15_000)
     })
     return passThrough(upstream)
   } finally {
@@ -266,7 +283,7 @@ app.post('/v1/*', async ({ request, params }) => {
       headers: fwdHeaders,
       body: request.body as any,
       redirect: 'manual',
-      signal: withCombinedSignal(request.signal, 15_000)
+      signal: withTimeout(request.signal, 15_000)
     })
 
     return passThrough(upstream)
