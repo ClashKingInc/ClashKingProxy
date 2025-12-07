@@ -1,20 +1,17 @@
-FROM oven/bun:1.3.3-alpine AS base
+FROM golang:1.23-alpine AS builder
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8011
+COPY go.mod go.sum ./
+RUN go mod download
+COPY server.go ./
+RUN go build -o proxy server.go
 
-# deps
-FROM base AS deps
-COPY package.json ./
-RUN bun install
-
-# app
-FROM base AS app
+FROM alpine:latest
 WORKDIR /app
-RUN apk add --no-cache curl
-COPY --from=deps /app/node_modules /app/node_modules
-COPY . .
+ENV HOST=0.0.0.0 PORT=8011
+RUN apk add --no-cache curl ca-certificates
+COPY --from=builder /app/proxy ./
 EXPOSE 8011
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD curl -f http://127.0.0.1:${PORT}/ || exit 1
 
-CMD ["bun", "run", "server.ts"]
+CMD ["./proxy"]
