@@ -193,7 +193,7 @@ func main() {
 		// build forward URL - use RequestURI to preserve encoding (e.g., %23 for #)
 		// RequestURI includes path + query string
 		pathAndQuery := strings.TrimPrefix(r.RequestURI, "/v1/")
-		
+
 		// For POST, we need to filter out fields param
 		if r.Method == http.MethodPost && strings.Contains(pathAndQuery, "fields=") {
 			// Parse and rebuild without fields
@@ -209,7 +209,7 @@ func main() {
 				}
 			}
 		}
-		
+
 		forward := baseURL + pathAndQuery
 
 		// create upstream request with combined context: client context + 15s timeout
@@ -230,7 +230,6 @@ func main() {
 
 		// headers
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("Accept-Encoding", "identity") // request no compression
 		key := nextKey()
 		req.Header.Set("Authorization", "Bearer "+key)
 		if r.Method == http.MethodPost {
