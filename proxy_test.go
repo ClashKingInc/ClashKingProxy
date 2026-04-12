@@ -108,21 +108,21 @@ func TestBuildForwardPathAndQuery(t *testing.T) {
 		{
 			name:        "removes fields from post queries",
 			method:      http.MethodPost,
-			requestURI:  "/v1/players/%23TAG?fields=name&limit=10",
+			requestURI:  testProdPlayerPathWithFields,
 			routePrefix: "/v1/",
 			want:        "players/%23TAG?limit=10",
 		},
 		{
 			name:        "drops query entirely when fields is the only post parameter",
 			method:      http.MethodPost,
-			requestURI:  "/v1/players/%23TAG?fields=name",
+			requestURI:  testProdPlayerPath + "?fields=name",
 			routePrefix: "/v1/",
 			want:        "players/%23TAG",
 		},
 		{
 			name:        "keeps fields for get requests",
 			method:      http.MethodGet,
-			requestURI:  "/v1/players/%23TAG?fields=name&limit=10",
+			requestURI:  testProdPlayerPathWithFields,
 			routePrefix: "/v1/",
 			want:        "players/%23TAG?fields=name&limit=10",
 		},
@@ -147,9 +147,9 @@ func TestNormalizeBaseURL(t *testing.T) {
 		want string
 	}{
 		{raw: "", want: ""},
-		{raw: "https://example.com", want: "https://example.com/"},
-		{raw: "https://example.com/", want: "https://example.com/"},
-		{raw: "https://example.com///", want: "https://example.com/"},
+		{raw: strings.TrimRight(testExampleBaseURL, "/"), want: testExampleBaseURL},
+		{raw: testExampleBaseURL, want: testExampleBaseURL},
+		{raw: testExampleBaseURL + "//", want: testExampleBaseURL},
 	}
 
 	for _, tt := range tests {
@@ -165,7 +165,7 @@ func TestNormalizeEndpoint(t *testing.T) {
 		want string
 	}{
 		{path: "/", want: "/"},
-		{path: "/v1/players/%23ABC123", want: "/players/{playerTag}"},
+		{path: "/v1/players/%23ABC123", want: testProdPlayerEndpoint},
 		{path: "/v1/clans/%23ABC123/currentwar", want: "/clans/{clanTag}/currentwar"},
 		{path: "/dev/locations/32000007/rankings/players", want: "/locations/{locationId}/rankings/players"},
 		{path: "/v1/labels/players", want: "/labels/players"},
@@ -255,19 +255,19 @@ func TestProxyRequestForwardsRequestAndCopiesResponse(t *testing.T) {
 		got.PathAndQuery = r.URL.RequestURI()
 		got.Authorization = r.Header.Get("Authorization")
 		got.Accept = r.Header.Get("Accept")
-		got.ContentType = r.Header.Get("Content-Type")
+		got.ContentType = r.Header.Get(headerContentType)
 		got.Body = string(body)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("ETag", "proxy-etag")
+		w.Header().Set(headerContentType, testJSONContentType)
+		w.Header().Set("ETag", testProxyETag)
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer upstream.Close()
 
-	server := newProxyServer(upstream.Client(), nil, []string{"rotated-key"}, "")
-	req := httptest.NewRequest(http.MethodPost, "/v1/players/%23TAG?fields=name&limit=10", strings.NewReader(`{"hello":"world"}`))
-	req.RequestURI = "/v1/players/%23TAG?fields=name&limit=10"
+	server := newProxyServer(upstream.Client(), nil, []string{testRotatedKey}, "")
+	req := httptest.NewRequest(http.MethodPost, testProdPlayerPathWithFields, strings.NewReader(`{"hello":"world"}`))
+	req.RequestURI = testProdPlayerPathWithFields
 	rec := httptest.NewRecorder()
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", normalizeBaseURL(upstream.URL), authRotateKeys)
@@ -283,24 +283,24 @@ func TestProxyRequestForwardsRequestAndCopiesResponse(t *testing.T) {
 	if rec.Body.String() != `{"ok":true}` {
 		t.Fatalf("response body = %q, want %q", rec.Body.String(), `{"ok":true}`)
 	}
-	if rec.Header().Get("ETag") != "proxy-etag" {
-		t.Fatalf("ETag header = %q, want %q", rec.Header().Get("ETag"), "proxy-etag")
+	if rec.Header().Get("ETag") != testProxyETag {
+		t.Fatalf("ETag header = %q, want %q", rec.Header().Get("ETag"), testProxyETag)
 	}
 
 	if got.Method != http.MethodPost {
 		t.Fatalf("upstream method = %q, want %q", got.Method, http.MethodPost)
 	}
-	if got.PathAndQuery != "/players/%23TAG?limit=10" {
-		t.Fatalf("upstream path and query = %q, want %q", got.PathAndQuery, "/players/%23TAG?limit=10")
+	if got.PathAndQuery != testProdPlayerForwardedPath {
+		t.Fatalf("upstream path and query = %q, want %q", got.PathAndQuery, testProdPlayerForwardedPath)
 	}
-	if got.Authorization != "Bearer rotated-key" {
-		t.Fatalf("upstream authorization = %q, want %q", got.Authorization, "Bearer rotated-key")
+	if got.Authorization != "Bearer "+testRotatedKey {
+		t.Fatalf("upstream authorization = %q, want %q", got.Authorization, "Bearer "+testRotatedKey)
 	}
-	if got.Accept != "application/json" {
-		t.Fatalf("upstream accept = %q, want %q", got.Accept, "application/json")
+	if got.Accept != testJSONContentType {
+		t.Fatalf("upstream accept = %q, want %q", got.Accept, testJSONContentType)
 	}
-	if got.ContentType != "application/json" {
-		t.Fatalf("upstream content type = %q, want %q", got.ContentType, "application/json")
+	if got.ContentType != testJSONContentType {
+		t.Fatalf("upstream content type = %q, want %q", got.ContentType, testJSONContentType)
 	}
 	if got.Body != `{"hello":"world"}` {
 		t.Fatalf("upstream body = %q, want %q", got.Body, `{"hello":"world"}`)
@@ -318,9 +318,9 @@ func TestProxyRequestForwardsBearerForDevRoutes(t *testing.T) {
 	defer upstream.Close()
 
 	server := newProxyServer(upstream.Client(), nil, []string{"unused"}, upstream.URL)
-	req := httptest.NewRequest(http.MethodGet, "/dev/players/%23TAG", nil)
-	req.RequestURI = "/dev/players/%23TAG"
-	req.Header.Set("Authorization", "Bearer forwarded-token")
+	req := httptest.NewRequest(http.MethodGet, testDevPlayerPath, nil)
+	req.RequestURI = testDevPlayerPath
+	req.Header.Set("Authorization", testForwardedBearer)
 	rec := httptest.NewRecorder()
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/dev/", normalizeBaseURL(upstream.URL), authForwardBearer)
@@ -330,15 +330,15 @@ func TestProxyRequestForwardsBearerForDevRoutes(t *testing.T) {
 	if proxyFailure {
 		t.Fatal("proxyRequest() proxyFailure = true, want false")
 	}
-	if authHeader != "Bearer forwarded-token" {
-		t.Fatalf("forwarded authorization = %q, want %q", authHeader, "Bearer forwarded-token")
+	if authHeader != testForwardedBearer {
+		t.Fatalf("forwarded authorization = %q, want %q", authHeader, testForwardedBearer)
 	}
 }
 
 func TestProxyRequestRequiresBearerForDevRoutes(t *testing.T) {
-	server := newProxyServer(nil, nil, []string{"rotated-key"}, "https://dev.example.com")
-	req := httptest.NewRequest(http.MethodGet, "/dev/players/%23TAG", nil)
-	req.RequestURI = "/dev/players/%23TAG"
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "https://dev.example.com")
+	req := httptest.NewRequest(http.MethodGet, testDevPlayerPath, nil)
+	req.RequestURI = testDevPlayerPath
 	rec := httptest.NewRecorder()
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/dev/", "https://dev.example.com/", authForwardBearer)
@@ -354,9 +354,9 @@ func TestProxyRequestRequiresBearerForDevRoutes(t *testing.T) {
 }
 
 func TestProxyRequestReturnsServiceUnavailableWithoutBaseURL(t *testing.T) {
-	server := newProxyServer(nil, nil, []string{"rotated-key"}, "")
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/%23TAG", nil)
-	req.RequestURI = "/v1/players/%23TAG"
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
+	req := httptest.NewRequest(http.MethodGet, testProdPlayerPath, nil)
+	req.RequestURI = testProdPlayerPath
 	rec := httptest.NewRecorder()
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", "", authRotateKeys)
@@ -372,18 +372,18 @@ func TestProxyRequestReturnsServiceUnavailableWithoutBaseURL(t *testing.T) {
 }
 
 func TestProxyRequestReturnsBadGatewayOnTransportError(t *testing.T) {
-	server := newProxyServer(nil, nil, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
 	server.client = &http.Client{
 		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return nil, errors.New("dial failure")
 		}),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/%23TAG", nil)
-	req.RequestURI = "/v1/players/%23TAG"
+	req := httptest.NewRequest(http.MethodGet, testProdPlayerPath, nil)
+	req.RequestURI = testProdPlayerPath
 	rec := httptest.NewRecorder()
 
-	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", "https://example.com/", authRotateKeys)
+	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", testExampleBaseURL, authRotateKeys)
 	if status != http.StatusBadGateway {
 		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusBadGateway)
 	}
@@ -396,7 +396,7 @@ func TestProxyRequestReturnsBadGatewayOnTransportError(t *testing.T) {
 }
 
 func TestHandleRootReturnsJSON(t *testing.T) {
-	server := newProxyServer(nil, nil, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -405,8 +405,8 @@ func TestHandleRootReturnsJSON(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleRoot() status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if rec.Header().Get("Content-Type") != "application/json" {
-		t.Fatalf("content type = %q, want %q", rec.Header().Get("Content-Type"), "application/json")
+	if rec.Header().Get(headerContentType) != testJSONContentType {
+		t.Fatalf("content type = %q, want %q", rec.Header().Get(headerContentType), testJSONContentType)
 	}
 	if rec.Body.String() != `{"message":"CoC Proxy Server is running."}` {
 		t.Fatalf("response body = %q", rec.Body.String())
@@ -418,13 +418,13 @@ func TestHandleStatsReturnsJSONPayload(t *testing.T) {
 	stats, setNow := newTestStatsCollector(base)
 
 	setNow(base.Add(-1 * time.Minute))
-	stats.Record("/clans/{clanTag}", 40*time.Millisecond, http.StatusOK, false)
+	stats.Record(testClanEndpoint, 40*time.Millisecond, http.StatusOK, false)
 
 	setNow(base)
-	stats.Record("/players/{playerTag}", 20*time.Millisecond, http.StatusNotFound, true)
-	stats.Record("/players/{playerTag}", 30*time.Millisecond, http.StatusOK, false)
+	stats.Record(testProdPlayerEndpoint, 20*time.Millisecond, http.StatusNotFound, true)
+	stats.Record(testProdPlayerEndpoint, 30*time.Millisecond, http.StatusOK, false)
 
-	server := newProxyServer(nil, stats, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, stats, []string{testRotatedKey}, "")
 	req := httptest.NewRequest(http.MethodGet, "/stats?series=1m&lookback=1h&endpoints=24h&limit=1", nil)
 	rec := httptest.NewRecorder()
 
@@ -433,8 +433,8 @@ func TestHandleStatsReturnsJSONPayload(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleStats() status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Header().Get("Content-Type"), "application/json") {
-		t.Fatalf("content type = %q, want JSON", rec.Header().Get("Content-Type"))
+	if !strings.Contains(rec.Header().Get(headerContentType), testJSONContentType) {
+		t.Fatalf("content type = %q, want JSON", rec.Header().Get(headerContentType))
 	}
 
 	var response statsResponse
@@ -456,8 +456,8 @@ func TestHandleStatsReturnsJSONPayload(t *testing.T) {
 	if len(response.EndpointBreakdown.Endpoints) != 1 {
 		t.Fatalf("endpoint breakdown rows = %d, want %d", len(response.EndpointBreakdown.Endpoints), 1)
 	}
-	if response.EndpointBreakdown.Endpoints[0].Endpoint != "/players/{playerTag}" {
-		t.Fatalf("top endpoint = %q, want %q", response.EndpointBreakdown.Endpoints[0].Endpoint, "/players/{playerTag}")
+	if response.EndpointBreakdown.Endpoints[0].Endpoint != testProdPlayerEndpoint {
+		t.Fatalf("top endpoint = %q, want %q", response.EndpointBreakdown.Endpoints[0].Endpoint, testProdPlayerEndpoint)
 	}
 }
 
@@ -467,7 +467,7 @@ func TestHandleStatsRejectsInvalidLimit(t *testing.T) {
 		return time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	}
 
-	server := newProxyServer(nil, stats, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, stats, []string{testRotatedKey}, "")
 	req := httptest.NewRequest(http.MethodGet, "/stats?endpoints=24h&limit=bad", nil)
 	rec := httptest.NewRecorder()
 
@@ -487,7 +487,7 @@ func TestHandleStatsRejectsInvalidSeries(t *testing.T) {
 		return time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	}
 
-	server := newProxyServer(nil, stats, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, stats, []string{testRotatedKey}, "")
 	req := httptest.NewRequest(http.MethodGet, "/stats?series=2m", nil)
 	rec := httptest.NewRecorder()
 
@@ -507,7 +507,7 @@ func TestHandleStatsRejectsInvalidEndpointWindow(t *testing.T) {
 		return time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	}
 
-	server := newProxyServer(nil, stats, []string{"rotated-key"}, "")
+	server := newProxyServer(nil, stats, []string{testRotatedKey}, "")
 	req := httptest.NewRequest(http.MethodGet, "/stats?endpoints=30d", nil)
 	rec := httptest.NewRecorder()
 
@@ -531,10 +531,10 @@ func TestRoutesProxyRequestUpdatesStats(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	server := newProxyServer(upstream.Client(), stats, []string{"rotated-key"}, "")
+	server := newProxyServer(upstream.Client(), stats, []string{testRotatedKey}, "")
 	server.prodBaseURL = normalizeBaseURL(upstream.URL)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/%23TAG", nil)
+	req := httptest.NewRequest(http.MethodGet, testProdPlayerPath, nil)
 	rec := httptest.NewRecorder()
 	server.routes().ServeHTTP(rec, req)
 
@@ -554,8 +554,8 @@ func TestRoutesProxyRequestUpdatesStats(t *testing.T) {
 	if len(breakdown.Endpoints) != 1 {
 		t.Fatalf("endpoint rows = %d, want %d", len(breakdown.Endpoints), 1)
 	}
-	if breakdown.Endpoints[0].Endpoint != "/players/{playerTag}" {
-		t.Fatalf("recorded endpoint = %q, want %q", breakdown.Endpoints[0].Endpoint, "/players/{playerTag}")
+	if breakdown.Endpoints[0].Endpoint != testProdPlayerEndpoint {
+		t.Fatalf("recorded endpoint = %q, want %q", breakdown.Endpoints[0].Endpoint, testProdPlayerEndpoint)
 	}
 }
 

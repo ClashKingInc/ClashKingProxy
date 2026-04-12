@@ -23,10 +23,10 @@ func TestStatsCollectorBuildWindows(t *testing.T) {
 	collector, setNow := newTestStatsCollector(base)
 
 	setNow(base.Add(-9 * time.Second))
-	collector.Record("/players/{playerTag}", 50*time.Millisecond, http.StatusOK, false)
+	collector.Record(testProdPlayerEndpoint, 50*time.Millisecond, http.StatusOK, false)
 
 	setNow(base)
-	collector.Record("/clans/{clanTag}", 100*time.Millisecond, http.StatusBadGateway, true)
+	collector.Record(testClanEndpoint, 100*time.Millisecond, http.StatusBadGateway, true)
 
 	windows := collector.buildWindows(base)
 	window := windows["10s"]
@@ -55,10 +55,10 @@ func TestStatsCollectorBuildSeries(t *testing.T) {
 	collector, setNow := newTestStatsCollector(base)
 
 	setNow(base.Truncate(time.Minute).Add(-1 * time.Minute))
-	collector.Record("/players/{playerTag}", 40*time.Millisecond, http.StatusOK, false)
+	collector.Record(testProdPlayerEndpoint, 40*time.Millisecond, http.StatusOK, false)
 
 	setNow(base.Truncate(time.Minute))
-	collector.Record("/players/{playerTag}", 20*time.Millisecond, http.StatusNotFound, true)
+	collector.Record(testProdPlayerEndpoint, 20*time.Millisecond, http.StatusNotFound, true)
 
 	series, ok := collector.buildSeries(base, "1m", "1h")
 	if !ok {
@@ -114,11 +114,11 @@ func TestStatsCollectorBuildEndpointBreakdown(t *testing.T) {
 
 	for range 3 {
 		setNow(base)
-		collector.Record("/players/{playerTag}", 25*time.Millisecond, http.StatusOK, false)
+		collector.Record(testProdPlayerEndpoint, 25*time.Millisecond, http.StatusOK, false)
 	}
 	for range 2 {
 		setNow(base.Add(-1 * time.Minute))
-		collector.Record("/clans/{clanTag}", 25*time.Millisecond, http.StatusOK, false)
+		collector.Record(testClanEndpoint, 25*time.Millisecond, http.StatusOK, false)
 	}
 	setNow(base.Add(-25 * time.Hour))
 	collector.Record("/ignored", 25*time.Millisecond, http.StatusOK, false)
@@ -133,8 +133,8 @@ func TestStatsCollectorBuildEndpointBreakdown(t *testing.T) {
 	if len(breakdown.Endpoints) != 1 {
 		t.Fatalf("endpoint row count = %d, want %d", len(breakdown.Endpoints), 1)
 	}
-	if breakdown.Endpoints[0].Endpoint != "/players/{playerTag}" {
-		t.Fatalf("top endpoint = %q, want %q", breakdown.Endpoints[0].Endpoint, "/players/{playerTag}")
+	if breakdown.Endpoints[0].Endpoint != testProdPlayerEndpoint {
+		t.Fatalf("top endpoint = %q, want %q", breakdown.Endpoints[0].Endpoint, testProdPlayerEndpoint)
 	}
 	if breakdown.Endpoints[0].Requests != 3 {
 		t.Fatalf("top endpoint requests = %d, want %d", breakdown.Endpoints[0].Requests, 3)
@@ -146,7 +146,7 @@ func TestStatsCollectorBuildEndpointBreakdownNormalizesLimits(t *testing.T) {
 	collector, setNow := newTestStatsCollector(base)
 
 	setNow(base)
-	collector.Record("/players/{playerTag}", 25*time.Millisecond, http.StatusOK, false)
+	collector.Record(testProdPlayerEndpoint, 25*time.Millisecond, http.StatusOK, false)
 
 	breakdown, ok := collector.buildEndpointBreakdown(base, "24h", 0)
 	if !ok {
@@ -170,9 +170,9 @@ func TestStatsCollectorBuildEndpointBreakdownForSevenDays(t *testing.T) {
 	collector, setNow := newTestStatsCollector(base)
 
 	setNow(base)
-	collector.Record("/players/{playerTag}", 25*time.Millisecond, http.StatusOK, false)
+	collector.Record(testProdPlayerEndpoint, 25*time.Millisecond, http.StatusOK, false)
 	setNow(base.Add(-6 * time.Hour))
-	collector.Record("/clans/{clanTag}", 25*time.Millisecond, http.StatusOK, false)
+	collector.Record(testClanEndpoint, 25*time.Millisecond, http.StatusOK, false)
 	setNow(base.Add(-8 * 24 * time.Hour))
 	collector.Record("/ignored", 25*time.Millisecond, http.StatusOK, false)
 
