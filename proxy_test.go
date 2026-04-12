@@ -272,7 +272,7 @@ func TestProxyRequestForwardsRequestAndCopiesResponse(t *testing.T) {
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", normalizeBaseURL(upstream.URL), authRotateKeys)
 	if status != http.StatusCreated {
-		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusCreated)
+		t.Fatalf(proxyRequestStatusFormat, status, http.StatusCreated)
 	}
 	if proxyFailure {
 		t.Fatal("proxyRequest() proxyFailure = true, want false")
@@ -325,7 +325,7 @@ func TestProxyRequestForwardsBearerForDevRoutes(t *testing.T) {
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/dev/", normalizeBaseURL(upstream.URL), authForwardBearer)
 	if status != http.StatusOK {
-		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusOK)
+		t.Fatalf(proxyRequestStatusFormat, status, http.StatusOK)
 	}
 	if proxyFailure {
 		t.Fatal("proxyRequest() proxyFailure = true, want false")
@@ -343,10 +343,10 @@ func TestProxyRequestRequiresBearerForDevRoutes(t *testing.T) {
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/dev/", "https://dev.example.com/", authForwardBearer)
 	if status != http.StatusUnauthorized {
-		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusUnauthorized)
+		t.Fatalf(proxyRequestStatusFormat, status, http.StatusUnauthorized)
 	}
 	if !proxyFailure {
-		t.Fatal("proxyRequest() proxyFailure = false, want true")
+		t.Fatal(proxyFailureFalseTrueMsg)
 	}
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("response code = %d, want %d", rec.Code, http.StatusUnauthorized)
@@ -361,10 +361,10 @@ func TestProxyRequestReturnsServiceUnavailableWithoutBaseURL(t *testing.T) {
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", "", authRotateKeys)
 	if status != http.StatusServiceUnavailable {
-		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusServiceUnavailable)
+		t.Fatalf(proxyRequestStatusFormat, status, http.StatusServiceUnavailable)
 	}
 	if !proxyFailure {
-		t.Fatal("proxyRequest() proxyFailure = false, want true")
+		t.Fatal(proxyFailureFalseTrueMsg)
 	}
 	if !strings.Contains(rec.Body.String(), "upstream is not configured") {
 		t.Fatalf("response body = %q, want to contain %q", rec.Body.String(), "upstream is not configured")
@@ -385,10 +385,10 @@ func TestProxyRequestReturnsBadGatewayOnTransportError(t *testing.T) {
 
 	status, proxyFailure := server.proxyRequest(rec, req, "/v1/", testExampleBaseURL, authRotateKeys)
 	if status != http.StatusBadGateway {
-		t.Fatalf("proxyRequest() status = %d, want %d", status, http.StatusBadGateway)
+		t.Fatalf(proxyRequestStatusFormat, status, http.StatusBadGateway)
 	}
 	if !proxyFailure {
-		t.Fatal("proxyRequest() proxyFailure = false, want true")
+		t.Fatal(proxyFailureFalseTrueMsg)
 	}
 	if !strings.Contains(rec.Body.String(), "upstream request failed") {
 		t.Fatalf("response body = %q, want to contain %q", rec.Body.String(), "upstream request failed")
@@ -431,7 +431,7 @@ func TestHandleStatsReturnsJSONPayload(t *testing.T) {
 	server.handleStats(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("handleStats() status = %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf(handleStatsStatusFormat, rec.Code, http.StatusOK)
 	}
 	if !strings.Contains(rec.Header().Get(headerContentType), testJSONContentType) {
 		t.Fatalf("content type = %q, want JSON", rec.Header().Get(headerContentType))
@@ -474,10 +474,10 @@ func TestHandleStatsRejectsInvalidLimit(t *testing.T) {
 	server.handleStats(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("handleStats() status = %d, want %d", rec.Code, http.StatusBadRequest)
+		t.Fatalf(handleStatsStatusFormat, rec.Code, http.StatusBadRequest)
 	}
 	if !strings.Contains(rec.Body.String(), "invalid limit") {
-		t.Fatalf("handleStats() body = %q, want to contain %q", rec.Body.String(), "invalid limit")
+		t.Fatalf(handleStatsBodyFormat, rec.Body.String(), "invalid limit")
 	}
 }
 
@@ -494,10 +494,10 @@ func TestHandleStatsRejectsInvalidSeries(t *testing.T) {
 	server.handleStats(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("handleStats() status = %d, want %d", rec.Code, http.StatusBadRequest)
+		t.Fatalf(handleStatsStatusFormat, rec.Code, http.StatusBadRequest)
 	}
 	if !strings.Contains(rec.Body.String(), "invalid series or lookback") {
-		t.Fatalf("handleStats() body = %q, want to contain %q", rec.Body.String(), "invalid series or lookback")
+		t.Fatalf(handleStatsBodyFormat, rec.Body.String(), "invalid series or lookback")
 	}
 }
 
@@ -514,10 +514,10 @@ func TestHandleStatsRejectsInvalidEndpointWindow(t *testing.T) {
 	server.handleStats(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("handleStats() status = %d, want %d", rec.Code, http.StatusBadRequest)
+		t.Fatalf(handleStatsStatusFormat, rec.Code, http.StatusBadRequest)
 	}
 	if !strings.Contains(rec.Body.String(), "invalid endpoints window") {
-		t.Fatalf("handleStats() body = %q, want to contain %q", rec.Body.String(), "invalid endpoints window")
+		t.Fatalf(handleStatsBodyFormat, rec.Body.String(), "invalid endpoints window")
 	}
 }
 

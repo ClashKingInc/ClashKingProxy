@@ -13,4 +13,8 @@ const (
 	testProxyETag                = "proxy-etag"
 	testExampleBaseURL           = "https://example.com/"
 	headerContentType            = "Content-Type"
+	proxyRequestStatusFormat     = "proxyRequest() status = %d, want %d"
+	proxyFailureFalseTrueMsg     = "proxyRequest() proxyFailure = false, want true"
+	handleStatsStatusFormat      = "handleStats() status = %d, want %d"
+	handleStatsBodyFormat        = "handleStats() body = %q, want to contain %q"
 )
