@@ -19,7 +19,7 @@ Lightweight Go proxy for the Clash of Clans API with rotating production keys an
 | --- | --- | --- | --- |
 | `COC_KEYS` | Yes | - | Comma-separated Clash of Clans API keys used for `/v1/` requests |
 | `HOST` | No | `0.0.0.0` | Bind host |
-| `PORT` | No | `80` | Bind port |
+| `PORT` | No | `8011` | Bind port |
 | `DEV_COC_URL` | No | - | Base URL for the `/dev/` upstream |
 
 The server also loads a local `.env` file automatically when present.
@@ -35,7 +35,7 @@ go run .
 
 ```bash
 docker build -t clashking-proxy .
-docker run --rm -p 80:80 -e COC_KEYS="key1,key2" clashking-proxy
+docker run --rm -p 8011:8011 -e COC_KEYS="key1,key2" clashking-proxy
 ```
 
 ## CI / DevSecOps
@@ -65,7 +65,7 @@ It runs automatically:
 Example:
 
 ```bash
-curl http://localhost:80/v1/players/%23PLAYER_TAG
+curl http://localhost:8011/v1/players/%23PLAYER_TAG
 ```
 
 ## License
