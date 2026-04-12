@@ -101,8 +101,7 @@ func (a aggregate) avgLatencyMS() *float64 {
 	if a.Requests == 0 {
 		return nil
 	}
-	value := float64(a.LatencyUS) / float64(a.Requests) / 1000.0
-	return &value
+	return new(float64(a.LatencyUS) / float64(a.Requests) / 1000.0)
 }
 
 type endpointBucket struct {

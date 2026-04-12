@@ -51,7 +51,7 @@ func main() {
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8011"
+		port = "80"
 	}
 
 	server := newProxyServer(buildHTTPClient(), newStatsCollector(), keys, os.Getenv("DEV_COC_URL"))
