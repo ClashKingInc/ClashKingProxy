@@ -51,7 +51,7 @@ It runs automatically:
 - Go vulnerability scanning with `govulncheck`
 - dependency review on pull requests
 - secret scanning with Gitleaks
-- SonarQube analysis with Quality Gate enforcement when the required secrets are configured
+- SonarCloud analysis with Quality Gate enforcement when the required secrets are configured
 
 ## API
 
