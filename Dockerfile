@@ -9,6 +9,5 @@ FROM alpine:latest
 WORKDIR /app
 RUN apk add --no-cache curl ca-certificates
 COPY --from=builder /app/proxy ./
-EXPOSE 8011
 
 CMD ["./proxy"]
