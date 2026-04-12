@@ -38,6 +38,21 @@ docker build -t clashking-proxy .
 docker run --rm -p 80:80 -e COC_KEYS="key1,key2" clashking-proxy
 ```
 
+## CI / DevSecOps
+
+This repository includes a quality- and security-focused GitHub Actions pipeline in `.github/workflows/ci.yml`.
+
+It runs automatically:
+
+- `gofmt` formatting checks
+- `go mod verify`
+- `go vet`
+- `go test` with coverage and `go build`
+- Go vulnerability scanning with `govulncheck`
+- dependency review on pull requests
+- secret scanning with Gitleaks
+- SonarQube analysis with Quality Gate enforcement when the required secrets are configured
+
 ## API
 
 - `GET /` health-style status response
