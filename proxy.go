@@ -173,8 +173,14 @@ func (s *proxyServer) proxyRequest(w http.ResponseWriter, r *http.Request, route
 		}
 	}
 
+	bodyReader := io.Reader(upstreamResp.Body)
+	if fallbackBody, ok := buildGoldPassCurrentFallback(pathAndQuery, upstreamResp.StatusCode, upstreamResp.Body, s.stats.now()); ok {
+		w.Header().Set("Content-Type", "application/json")
+		bodyReader = strings.NewReader(fallbackBody)
+	}
+
 	w.WriteHeader(upstreamResp.StatusCode)
-	_, _ = io.Copy(w, upstreamResp.Body)
+	_, _ = io.Copy(w, bodyReader)
 	return upstreamResp.StatusCode, false
 }
 
@@ -220,4 +226,48 @@ func normalizeBaseURL(raw string) string {
 		return ""
 	}
 	return strings.TrimRight(raw, "/") + "/"
+}
+
+func buildGoldPassCurrentFallback(pathAndQuery string, statusCode int, body io.Reader, now time.Time) (string, bool) {
+	if statusCode != http.StatusOK || !isGoldPassCurrentPath(pathAndQuery) {
+		return "", false
+	}
+
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(string(payload)) != "{}" {
+		return "", false
+	}
+
+	start, end := currentGoldPassSeasonWindow(now.UTC())
+	response := struct {
+		StartTime string `json:"startTime"`
+		EndTime   string `json:"endTime"`
+	}{
+		StartTime: start.Format(time.RFC3339),
+		EndTime:   end.Format(time.RFC3339),
+	}
+
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		return "", false
+	}
+	return string(encoded), true
+}
+
+func isGoldPassCurrentPath(pathAndQuery string) bool {
+	path := pathAndQuery
+	if idx := strings.IndexByte(path, '?'); idx >= 0 {
+		path = path[:idx]
+	}
+	path = "/" + strings.TrimPrefix(strings.TrimSpace(path), "/")
+	return path == "/goldpass/seasons/current"
+}
+
+func currentGoldPassSeasonWindow(now time.Time) (time.Time, time.Time) {
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+	return start, end
 }
