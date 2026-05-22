@@ -13,6 +13,7 @@ import (
 )
 
 const prodBaseURL = "https://api.clashofclans.com/v1/"
+const defaultCocAssetsURL = "https://api-assets.clashofclans.com/"
 
 type authMode int
 
@@ -32,11 +33,12 @@ func (r *keyRotator) Next() string {
 }
 
 type proxyServer struct {
-	client      *http.Client
-	stats       *statsCollector
-	keys        *keyRotator
-	prodBaseURL string
-	devBaseURL  string
+	client         *http.Client
+	stats          *statsCollector
+	keys           *keyRotator
+	prodBaseURL    string
+	devBaseURL     string
+	cocAssetsURL   string
 }
 
 func newProxyServer(client *http.Client, stats *statsCollector, keys []string, devBaseURL string) *proxyServer {
@@ -47,11 +49,12 @@ func newProxyServer(client *http.Client, stats *statsCollector, keys []string, d
 		stats = newStatsCollector()
 	}
 	return &proxyServer{
-		client:      client,
-		stats:       stats,
-		keys:        &keyRotator{keys: append([]string(nil), keys...)},
-		prodBaseURL: prodBaseURL,
-		devBaseURL:  normalizeBaseURL(devBaseURL),
+		client:       client,
+		stats:        stats,
+		keys:         &keyRotator{keys: append([]string(nil), keys...)},
+		prodBaseURL:  prodBaseURL,
+		devBaseURL:   normalizeBaseURL(devBaseURL),
+		cocAssetsURL: defaultCocAssetsURL,
 	}
 }
 
@@ -61,6 +64,7 @@ func (s *proxyServer) routes() http.Handler {
 	mux.HandleFunc("/stats", s.handleStats)
 	mux.HandleFunc("/v1/", s.handleProxy("/v1/", s.prodBaseURL, authRotateKeys))
 	mux.HandleFunc("/dev/", s.handleProxy("/dev/", s.devBaseURL, authForwardBearer))
+	mux.HandleFunc("/images/", s.handleImages())
 	return mux
 }
 
@@ -220,4 +224,54 @@ func normalizeBaseURL(raw string) string {
 		return ""
 	}
 	return strings.TrimRight(raw, "/") + "/"
+}
+
+func (s *proxyServer) handleImages() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		imagePath := strings.TrimPrefix(r.URL.EscapedPath(), "/images/")
+		forwardURL := s.cocAssetsURL + imagePath
+
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		req, err := http.NewRequestWithContext(ctx, r.Method, forwardURL, nil)
+		if err != nil {
+			http.Error(w, "failed to create upstream request", http.StatusInternalServerError)
+			return
+		}
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			http.Error(w, "upstream request failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				log.Printf("failed to close upstream response body: %v", err)
+			}
+		}()
+
+		for _, h := range []string{"content-type", "cache-control", "etag", "last-modified", "expires", "content-length"} {
+			if v := resp.Header.Get(h); v != "" {
+				w.Header().Set(h, v)
+			}
+		}
+
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}
 }

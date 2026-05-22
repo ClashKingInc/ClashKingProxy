@@ -564,3 +564,82 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
+
+func TestHandleImagesProxiesImageWithCORSHeaders(t *testing.T) {
+	var gotPath string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", testImageContentType)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(testImageBody))
+	}))
+	defer upstream.Close()
+
+	server := newProxyServer(upstream.Client(), nil, []string{testRotatedKey}, "")
+	server.cocAssetsURL = upstream.URL + "/"
+
+	req := httptest.NewRequest(http.MethodGet, testImagePath, nil)
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleImages() status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", rec.Header().Get("Access-Control-Allow-Origin"), "*")
+	}
+	if rec.Header().Get("Content-Type") != testImageContentType {
+		t.Fatalf("Content-Type = %q, want %q", rec.Header().Get("Content-Type"), testImageContentType)
+	}
+	if rec.Body.String() != testImageBody {
+		t.Fatalf("body = %q, want %q", rec.Body.String(), testImageBody)
+	}
+	if gotPath != "/clans/abc.png" {
+		t.Fatalf("upstream path = %q, want %q", gotPath, "/clans/abc.png")
+	}
+}
+
+func TestHandleImagesOptionsPreflightReturnsNoContent(t *testing.T) {
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
+
+	req := httptest.NewRequest(http.MethodOptions, testImagePath, nil)
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("OPTIONS status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want *", rec.Header().Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestHandleImagesRejectsUnsupportedMethod(t *testing.T) {
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
+
+	req := httptest.NewRequest(http.MethodPost, testImagePath, nil)
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestHandleImagesReturnsBadGatewayOnUpstreamError(t *testing.T) {
+	server := newProxyServer(nil, nil, []string{testRotatedKey}, "")
+	server.cocAssetsURL = "http://127.0.0.1:0/"
+	server.client = &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("dial failure")
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, testImagePath, nil)
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("bad gateway status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+}

@@ -17,4 +17,7 @@ const (
 	proxyFailureFalseTrueMsg     = "proxyRequest() proxyFailure = false, want true"
 	handleStatsStatusFormat      = "handleStats() status = %d, want %d"
 	handleStatsBodyFormat        = "handleStats() body = %q, want to contain %q"
+	testImagePath                = "/images/clans/abc.png"
+	testImageContentType         = "image/png"
+	testImageBody                = "PNG_DATA"
 )
