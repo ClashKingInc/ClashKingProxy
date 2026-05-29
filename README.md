@@ -1,12 +1,13 @@
 # ClashKingProxy
 
-Lightweight Go proxy for the Clash of Clans API with rotating production keys and built-in request stats.
+Lightweight Go proxy for the Clash of Clans API with rotating production keys, built-in request stats, and a Cloudflare Worker asset proxy for CORS-safe image delivery.
 
 ## Features
 
 - Rotates requests across multiple production API keys from `COC_KEYS`
 - Proxies Clash of Clans production traffic under `/v1/`
 - Exposes rolling request, latency, status-code, and endpoint usage metrics at `/stats`
+- Includes `assets-proxy.js` for proxying Clash of Clans API assets through Cloudflare Workers
 
 ## Requirements
 
@@ -38,21 +39,6 @@ docker build -t clashking-proxy .
 docker run --rm -p 8011:8011 -e COC_KEYS="key1,key2" clashking-proxy
 ```
 
-## CI / DevSecOps
-
-This repository includes a quality- and security-focused GitHub Actions pipeline in `.github/workflows/ci.yml`.
-
-It runs automatically:
-
-- `gofmt` formatting checks
-- `go mod verify`
-- `go vet`
-- `go test` with coverage and `go build`
-- Go vulnerability scanning with `govulncheck`
-- dependency review on pull requests
-- secret scanning with Gitleaks
-- SonarCloud analysis with Quality Gate enforcement when the required secrets are configured
-
 ## API
 
 - `GET /` health-style status response
@@ -66,6 +52,17 @@ Example:
 
 ```bash
 curl http://localhost:8011/v1/players/%23PLAYER_TAG
+```
+
+## Asset Worker
+
+`assets-proxy.js` is a standalone Cloudflare Worker proxy for Clash of Clans API image assets.
+
+Example:
+
+```text
+https://assets-proxy.clashk.ing/badges/512/eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
+-> https://api-assets.clashofclans.com/badges/512/eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
 ```
 
 ## License
