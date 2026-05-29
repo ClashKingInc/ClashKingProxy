@@ -61,8 +61,13 @@ curl http://localhost:8011/v1/players/%23PLAYER_TAG
 Example:
 
 ```text
-https://assets-proxy.clashk.ing/badges/512/eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
--> https://api-assets.clashofclans.com/badges/512/eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
+Proxy:
+https://assets-proxy.clashk.ing/badges/512/
+eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
+
+Upstream:
+https://api-assets.clashofclans.com/badges/512/
+eX-l0ROdCFJw-nYPv721y1exbwOwDBZZRZuxMRGg2xo.png
 ```
 
 ## License
