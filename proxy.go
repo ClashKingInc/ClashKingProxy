@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -158,6 +160,12 @@ func (s *proxyServer) proxyRequest(w http.ResponseWriter, r *http.Request, route
 
 	upstreamResp, err := s.client.Do(req)
 	if err != nil {
+		var netErr net.Error
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+			w.Header().Set("Retry-After", "5")
+			http.Error(w, "upstream request timed out", http.StatusGatewayTimeout)
+			return http.StatusGatewayTimeout, true
+		}
 		http.Error(w, "upstream request failed: "+err.Error(), http.StatusBadGateway)
 		return http.StatusBadGateway, true
 	}
