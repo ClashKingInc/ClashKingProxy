@@ -48,10 +48,14 @@ func newProxyServer(client *http.Client, stats *statsCollector, keys []string, d
 	if stats == nil {
 		stats = newStatsCollector()
 	}
+	bearerKeys := make([]string, len(keys))
+	for i, key := range keys {
+		bearerKeys[i] = "Bearer " + key
+	}
 	return &proxyServer{
 		client:      client,
 		stats:       stats,
-		keys:        &keyRotator{keys: append([]string(nil), keys...)},
+		keys:        &keyRotator{keys: bearerKeys},
 		prodBaseURL: prodBaseURL,
 		devBaseURL:  normalizeBaseURL(devBaseURL),
 	}
@@ -150,6 +154,9 @@ func (s *proxyServer) proxyRequest(w http.ResponseWriter, r *http.Request, route
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", authHeader)
+	if acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 	if r.Method == http.MethodPost {
 		if contentType := r.Header.Get("Content-Type"); contentType != "" {
 			req.Header.Set("Content-Type", contentType)
@@ -175,10 +182,13 @@ func (s *proxyServer) proxyRequest(w http.ResponseWriter, r *http.Request, route
 		}
 	}()
 
-	for _, headerName := range []string{"cache-control", "expires", "etag", "last-modified", "content-type"} {
+	for _, headerName := range []string{"cache-control", "expires", "etag", "last-modified", "content-type", "content-encoding", "vary"} {
 		if value := upstreamResp.Header.Get(headerName); value != "" {
 			w.Header().Set(headerName, value)
 		}
+	}
+	if upstreamResp.ContentLength >= 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(upstreamResp.ContentLength, 10))
 	}
 
 	w.WriteHeader(upstreamResp.StatusCode)
@@ -189,7 +199,7 @@ func (s *proxyServer) proxyRequest(w http.ResponseWriter, r *http.Request, route
 func (s *proxyServer) resolveAuthorization(r *http.Request, mode authMode) (string, bool) {
 	switch mode {
 	case authRotateKeys:
-		return "Bearer " + s.keys.Next(), true
+		return s.keys.Next(), true
 	case authForwardBearer:
 		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 		if !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
@@ -203,6 +213,37 @@ func (s *proxyServer) resolveAuthorization(r *http.Request, mode authMode) (stri
 	default:
 		return "", false
 	}
+}
+
+func acceptsGzip(header string) bool {
+	for header != "" {
+		encoding, remaining, hasMore := strings.Cut(header, ",")
+		header = remaining
+
+		name, parameters, _ := strings.Cut(encoding, ";")
+		if strings.EqualFold(strings.TrimSpace(name), "gzip") {
+			quality := 1.0
+			for parameters != "" {
+				parameter, rest, _ := strings.Cut(parameters, ";")
+				parameters = rest
+				key, value, ok := strings.Cut(parameter, "=")
+				if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
+					continue
+				}
+				parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				if err != nil {
+					return false
+				}
+				quality = parsed
+			}
+			return quality > 0
+		}
+
+		if !hasMore {
+			break
+		}
+	}
+	return false
 }
 
 func buildForwardPathAndQuery(r *http.Request, routePrefix string) string {
