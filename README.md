@@ -8,6 +8,7 @@ Lightweight Go proxy for the Clash of Clans API with rotating production keys, b
 - Proxies Clash of Clans production traffic under `/v1/`
 - Exposes rolling request, latency, status-code, and endpoint usage metrics at `/stats`
 - Includes `assets-proxy.js` for proxying Clash of Clans API assets through Cloudflare Workers
+- Keeps metrics aggregate-only; do not log bearer tokens, `COC_KEYS`, raw authorization headers, request bodies, or client IP addresses
 
 ## Requirements
 
